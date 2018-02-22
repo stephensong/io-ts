@@ -20,13 +20,13 @@ export function strictInterfaceWithOptionals<R extends t.Props, O extends t.Prop
     (m, c, decoder) => {
       const looseValidation = loose.validate(m, c, loose)
       if (looseValidation.isLeft()) {
-        return t.failures(m, t.getContextEntry(c, decoder), looseValidation.value.children)
+        return t.failures(m, String(c), decoder, looseValidation.value.children)
       } else {
         const o = looseValidation.value
         const errors: Left<t.VError, any>[] = Object.getOwnPropertyNames(o)
-          .map(key => (!props.hasOwnProperty(key) ? t.failure(o[key], t.getContextEntry(key, t.never)) : undefined))
+          .map(key => (!props.hasOwnProperty(key) ? t.failure(o[key], String(key), t.never) : undefined))
           .filter((e): e is Left<t.VError, any> => e !== undefined)
-        return errors.length ? t.failures(m, t.getContextEntry(c, decoder), errors.map(x => x.value)) : t.success(o)
+        return errors.length ? t.failures(m, String(c), decoder, errors.map(x => x.value)) : t.success(o)
       }
     },
     loose.encode

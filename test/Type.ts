@@ -11,7 +11,7 @@ describe('Type', () => {
       t.number.is,
       (s, c, decoder) => {
         const n = parseFloat(s)
-        return isNaN(n) ? t.failure(s, t.getContextEntry(c, decoder)) : t.success(n)
+        return isNaN(n) ? t.failure(s, String(c), decoder) : t.success(n)
       },
       n => String(n)
     )

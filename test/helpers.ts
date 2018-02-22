@@ -27,7 +27,7 @@ export const string2 = new t.Type<string, string>(
       if (s.length === 2) {
         return t.success(s[0] + '-' + s[1])
       } else {
-        return t.failure(s, t.getContextEntry(c, decoder))
+        return t.failure(s, String(c), decoder)
       }
     }),
   a => a[0] + a[2]
@@ -39,7 +39,7 @@ export const DateFromNumber = new t.Type<Date, number>(
   (s, c, decoder) =>
     t.number.validate(s, c, t.number).chain(n => {
       const d = new Date(n)
-      return isNaN(d.getTime()) ? t.failure(n, t.getContextEntry(c, decoder)) : t.success(d)
+      return isNaN(d.getTime()) ? t.failure(n, String(c), decoder) : t.success(d)
     }),
   a => a.getTime()
 )
@@ -49,7 +49,7 @@ export const NumberFromString = new t.Type<number, string, string>(
   t.number.is,
   (s, c, decoder) => {
     const n = parseFloat(s)
-    return isNaN(n) ? t.failure(s, t.getContextEntry(c, decoder)) : t.success(n)
+    return isNaN(n) ? t.failure(s, String(c), decoder) : t.success(n)
   },
   String
 )
