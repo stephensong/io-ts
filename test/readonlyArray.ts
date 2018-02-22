@@ -1,6 +1,7 @@
 import * as assert from 'assert'
 import * as t from '../src/index'
 import { assertSuccess, assertFailure, DateFromNumber } from './helpers'
+import { map } from '../src/index'
 
 describe('readonlyArray', () => {
   it('should succeed validating a valid value', () => {
@@ -15,7 +16,7 @@ describe('readonlyArray', () => {
 
   it('should freeze the value', () => {
     const T = t.readonlyArray(t.number)
-    T.decode([1]).map(x => assert.ok(Object.isFrozen(x)))
+    map(T.decode([1]), x => assert.ok(Object.isFrozen(x)))
   })
 
   it('should serialize a deserialized', () => {

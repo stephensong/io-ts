@@ -1,5 +1,5 @@
 import { Reporter } from './Reporter'
-import { Context, getFunctionName, ValidationError, VError } from './index'
+import { Context, getFunctionName, ValidationError, VError, fold } from './index'
 import * as arrays from 'fp-ts/lib/Array'
 import { compose } from 'fp-ts/lib/function'
 
@@ -36,5 +36,5 @@ export const convertError = (x: VError): ValidationError[] => {
   }
 }
 export const PathReporter: Reporter<Array<string>> = {
-  report: validation => validation.fold(compose(failure, convertError), success)
+  report: validation => fold(validation, compose(failure, convertError), success)
 }

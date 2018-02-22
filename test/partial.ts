@@ -8,6 +8,7 @@ import {
   assertDeepEqual,
   withDefault
 } from './helpers'
+import { fold } from '../src/index'
 
 describe('partial', () => {
   it('should succeed validating a valid value', () => {
@@ -18,18 +19,8 @@ describe('partial', () => {
 
   it('should not add optional keys', () => {
     const T = t.partial({ a: t.number })
-    assert.strictEqual(
-      T.decode({})
-        .fold<any>(t.identity, t.identity)
-        .hasOwnProperty('a'),
-      false
-    )
-    assert.strictEqual(
-      T.decode({ b: 1 })
-        .fold<any>(t.identity, t.identity)
-        .hasOwnProperty('a'),
-      false
-    )
+    assert.strictEqual(fold<any, any>(T.decode({}), t.identity, t.identity).hasOwnProperty('a'), false)
+    assert.strictEqual(fold<any, any>(T.decode({ b: 1 }), t.identity, t.identity).hasOwnProperty('a'), false)
   })
 
   it('should return the same reference if validation succeeded', () => {

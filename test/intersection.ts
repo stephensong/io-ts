@@ -1,6 +1,7 @@
 import * as assert from 'assert'
 import * as t from '../src/index'
 import { assertSuccess, assertFailure, assertStrictEqual, assertDeepEqual, DateFromNumber } from './helpers'
+import { isRight } from '../src/index'
 
 describe('intersection', () => {
   it('should succeed validating a valid value', () => {
@@ -11,8 +12,8 @@ describe('intersection', () => {
   it('should keep unknown properties', () => {
     const T = t.intersection([t.interface({ a: t.number }), t.interface({ b: t.number })])
     const validation = T.decode({ a: 1, b: 1, c: true })
-    if (validation.isRight()) {
-      assert.deepEqual(validation.value, { a: 1, b: 1, c: true })
+    if (isRight(validation)) {
+      assert.deepEqual(validation, { a: 1, b: 1, c: true })
     } else {
       assert.ok(false)
     }

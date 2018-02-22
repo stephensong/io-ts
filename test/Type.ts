@@ -1,7 +1,6 @@
 import * as assert from 'assert'
 import * as t from '../src/index'
 import { assertFailure } from './helpers'
-import { right } from 'fp-ts/lib/Either'
 
 describe('Type', () => {
   it('pipe', () => {
@@ -16,7 +15,7 @@ describe('Type', () => {
       n => String(n)
     )
     const T = AOI.pipe(BAA, 'T')
-    assert.deepEqual(T.decode('1'), right(1))
+    assert.deepEqual(T.decode('1'), 1)
     assertFailure(T.decode('a'), ['Invalid value "a" supplied to : T'])
   })
 })

@@ -1,29 +1,30 @@
 import * as assert from 'assert'
 import * as t from '../src/index'
 import { PathReporter } from '../src/PathReporter'
+import { isRight, isLeft, fold, chain } from '../src/index'
 
 export function assertSuccess<T>(validation: t.Validation<T>): void {
-  assert.ok(validation.isRight())
+  assert.ok(isRight(validation))
 }
 
 export function assertFailure<T>(validation: t.Validation<T>, descriptions: Array<string>): void {
-  assert.ok(validation.isLeft())
+  assert.ok(isLeft(validation))
   assert.deepEqual(PathReporter.report(validation), descriptions)
 }
 
 export function assertStrictEqual<T>(validation: t.Validation<T>, value: any): void {
-  assert.strictEqual(validation.fold<any>(t.identity, t.identity), value)
+  assert.strictEqual(fold<T, any>(validation, t.identity, t.identity), value)
 }
 
 export function assertDeepEqual<T>(validation: t.Validation<T>, value: any): void {
-  assert.deepEqual(validation.fold<any>(t.identity, t.identity), value)
+  assert.deepEqual(fold<T, any>(validation, t.identity, t.identity), value)
 }
 
 export const string2 = new t.Type<string, string>(
   'string2',
   (v): v is string => t.string.is(v) && v[1] === '-',
   (s, c, decoder) =>
-    t.string.validate(s, c, t.string).chain(s => {
+    chain(t.string.validate(s, c, t.string), s => {
       if (s.length === 2) {
         return t.success(s[0] + '-' + s[1])
       } else {
@@ -37,7 +38,7 @@ export const DateFromNumber = new t.Type<Date, number>(
   'DateFromNumber',
   (v): v is Date => v instanceof Date,
   (s, c, decoder) =>
-    t.number.validate(s, c, t.number).chain(n => {
+    chain(t.number.validate(s, c, t.number), n => {
       const d = new Date(n)
       return isNaN(d.getTime()) ? t.failure(n, String(c), decoder) : t.success(d)
     }),

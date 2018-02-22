@@ -1,4 +1,4 @@
-import { Either, Left, Right } from 'fp-ts/lib/Either'
+import { Left } from 'fp-ts/lib/Either'
 import { Predicate } from 'fp-ts/lib/function'
 
 declare global {
@@ -18,7 +18,15 @@ export interface ValidationError {
   readonly value: mixed
   readonly context: Context
 }
-export type Validation<A> = Either<VError, A>
+
+export const isLeft = <A>(v: Validation<A>): v is Left<VError, A> => v instanceof Left
+export const isRight = <A>(v: Validation<A>): v is A => !(v instanceof Left)
+export const fold = <A, U>(v: Validation<A>, l: (l: VError) => U, f: (v: A) => U): U => (isLeft(v) ? l(v.value) : f(v))
+export const chain = <A, U>(v: Validation<A>, f: (v: A) => Validation<U>): Validation<U> =>
+  isLeft(v) ? (v as any) : f(v)
+export const map = <A, U>(v: Validation<A>, f: (v: A) => U): U => (isLeft(v) ? (v as any) : f(v))
+
+export type Validation<A> = Left<VError, A> | A
 export type Is<A> = (m: mixed) => m is A
 export type Validate<I, A> = (i: I, key: string | number, decoder: Decoder<any, any>) => Validation<A>
 export type Decode<I, A> = (i: I) => Validation<A>
@@ -69,10 +77,10 @@ export class Type<A, O = A, I = mixed> implements Decoder<I, A>, Encoder<A, O> {
       ab.is,
       (i, c, decoder) => {
         const validation = this.validate(i, c, decoder)
-        if (validation.isLeft()) {
+        if (isLeft(validation)) {
           return validation as any
         } else {
-          return ab.validate(validation.value, c, decoder)
+          return ab.validate(validation, c, decoder)
         }
       },
       this.encode === identity && ab.encode === identity ? (identity as any) : b => this.encode(ab.encode(b))
@@ -116,7 +124,7 @@ export const failureError = (value: mixed, key: string, type: Decoder<any, any>,
 export const failure = <T>(value: mixed, key: string, type: Decoder<any, any>, children: VErrors = []): Validation<T> =>
   new Left({ value, key, type, children })
 
-export const success = <T>(value: T): Validation<T> => new Right<VError, T>(value)
+export const success = <T>(value: T): Validation<T> => value
 
 //
 // basic types
@@ -297,10 +305,10 @@ export const refinement = <RT extends Any>(
     (m): m is TypeOf<RT> => type.is(m) && predicate(m),
     (i, c, decoder) => {
       const validation = type.validate(i, c, decoder)
-      if (validation.isLeft()) {
+      if (isLeft(validation)) {
         return validation
       } else {
-        const a = validation.value
+        const a = validation
         return predicate(a) ? success(a) : failure(a, String(c), decoder)
       }
     },
@@ -443,20 +451,20 @@ export const array = <RT extends Mixed>(
     (m): m is Array<TypeOf<RT>> => arrayType.is(m) && m.every(type.is),
     (m, c, decoder) => {
       const arrayValidation = arrayType.validate(m, c, decoder)
-      if (arrayValidation.isLeft()) {
+      if (isLeft(arrayValidation)) {
         return arrayValidation
       } else {
-        const xs = arrayValidation.value
+        const xs = arrayValidation
         const len = xs.length
         let a: Array<TypeOf<RT>> = xs
         const errors: VErrors = []
         for (let i = 0; i < len; i++) {
           const x = xs[i]
           const validation = type.validate(x, i, type)
-          if (validation.isLeft()) {
+          if (isLeft(validation)) {
             errors.push(validation.value)
           } else {
-            const vx = validation.value
+            const vx = validation
             if (vx !== x) {
               if (a === xs) {
                 a = xs.slice()
@@ -535,20 +543,20 @@ export const type = <P extends Props>(
     },
     (m, c, decoder) => {
       const dictionaryValidation = Dictionary.validate(m, c, decoder)
-      if (dictionaryValidation.isLeft()) {
+      if (isLeft(dictionaryValidation)) {
         return dictionaryValidation
       } else {
-        const o = dictionaryValidation.value
+        const o = dictionaryValidation
         let a = o
         const errors: VErrors = []
         for (let k in props) {
           const ok = o[k]
           const type = props[k]
           const validation = type.validate(ok, k, type)
-          if (validation.isLeft()) {
+          if (isLeft(validation)) {
             errors.push(validation.value)
           } else {
-            const vok = validation.value
+            const vok = validation
             if (vok !== ok) {
               if (a === o) {
                 a = { ...o }
@@ -655,10 +663,10 @@ export const dictionary = <D extends Mixed, C extends Mixed>(
       Dictionary.is(m) && Object.keys(m).every(k => domain.is(k) && codomain.is(m[k])),
     (m, c, decoder) => {
       const dictionaryValidation = Dictionary.validate(m, c, decoder)
-      if (dictionaryValidation.isLeft()) {
+      if (isLeft(dictionaryValidation)) {
         return dictionaryValidation
       } else {
-        const o = dictionaryValidation.value
+        const o = dictionaryValidation
         const a: { [key: string]: any } = {}
         const errors: VErrors = []
         let changed = false
@@ -666,17 +674,17 @@ export const dictionary = <D extends Mixed, C extends Mixed>(
           const ok = o[k]
           const domainValidation = domain.validate(k, k, domain)
           const codomainValidation = codomain.validate(ok, k, codomain)
-          if (domainValidation.isLeft()) {
+          if (isLeft(domainValidation)) {
             errors.push(domainValidation.value)
           } else {
-            const vk = domainValidation.value
+            const vk = domainValidation
             changed = changed || vk !== k
             k = vk
           }
-          if (codomainValidation.isLeft()) {
+          if (isLeft(codomainValidation)) {
             errors.push(codomainValidation.value)
           } else {
-            const vok = codomainValidation.value
+            const vok = codomainValidation
             changed = changed || vok !== ok
             a[k] = vok
           }
@@ -727,7 +735,7 @@ export const union = <RTS extends Array<Mixed>>(
       for (let i = 0; i < len; i++) {
         const type = types[i]
         const validation = type.validate(m, i, type)
-        if (validation.isLeft()) {
+        if (isLeft(validation)) {
           errors.push(validation.value)
         } else {
           return validation
@@ -812,10 +820,10 @@ export function intersection<RTS extends Array<Mixed>>(
       for (let i = 0; i < len; i++) {
         const type = types[i]
         const validation = type.validate(a, i, type)
-        if (validation.isLeft()) {
+        if (isLeft(validation)) {
           errors.push(...validation.value.children)
         } else {
-          a = validation.value
+          a = validation
         }
       }
       return errors.length ? failures(m, String(c), decoder, errors) : success(a)
@@ -888,20 +896,20 @@ export function tuple<RTS extends Array<Mixed>>(
     (m): m is any => arrayType.is(m) && m.length === len && types.every((type, i) => type.is(m[i])),
     (m, c, decoder) => {
       const arrayValidation = arrayType.validate(m, c, arrayType)
-      if (arrayValidation.isLeft()) {
+      if (isLeft(arrayValidation)) {
         return arrayValidation
       } else {
-        const as = arrayValidation.value
+        const as = arrayValidation
         let t: Array<any> = as
         const errors: VErrors = []
         for (let i = 0; i < len; i++) {
           const a = as[i]
           const type = types[i]
           const validation = type.validate(a, i, type)
-          if (validation.isLeft()) {
+          if (isLeft(validation)) {
             errors.push(validation.value)
           } else {
-            const va = validation.value
+            const va = validation
             if (va !== a) {
               if (t === as) {
                 t = as.slice()
@@ -945,13 +953,17 @@ export const readonly = <RT extends Mixed>(
   new ReadonlyType(
     name,
     type.is,
-    (m, c, decoder) =>
-      type.validate(m, c, decoder).map(x => {
+    (m, c, decoder) => {
+      const res = type.validate(m, c, decoder)
+      if (isLeft(res)) {
+        return res
+      } else {
         if (process.env.NODE_ENV !== 'production') {
-          return Object.freeze(x)
+          return Object.freeze(res)
         }
-        return x
-      }),
+        return res
+      }
+    },
     type.encode === identity ? identity : type.encode,
     type
   )
@@ -980,15 +992,19 @@ export const readonlyArray = <RT extends Mixed>(
   const arrayType = array(type)
   return new ReadonlyArrayType(
     name,
-    arrayType.is,
-    (m, c, decoder) =>
-      arrayType.validate(m, c, decoder).map(x => {
+    arrayType.is as any,
+    (m, c, decoder) => {
+      const res = arrayType.validate(m, c, decoder)
+      if (isLeft(res)) {
+        return res
+      } else {
         if (process.env.NODE_ENV !== 'production') {
-          return Object.freeze(x)
+          return Object.freeze(res)
         } else {
-          return x
+          return res as any
         }
-      }),
+      }
+    },
     arrayType.encode as any,
     type
   )
@@ -1022,10 +1038,10 @@ export const strict = <P extends Props>(
     (m): m is TypeOfProps<P> => loose.is(m) && Object.getOwnPropertyNames(m).every(k => props.hasOwnProperty(k)),
     (m, c, decoder) => {
       const looseValidation = loose.validate(m, c, loose)
-      if (looseValidation.isLeft()) {
+      if (isLeft(looseValidation)) {
         return looseValidation
       } else {
-        const o = looseValidation.value
+        const o = looseValidation
         const keys = Object.getOwnPropertyNames(o)
         const len = keys.length
         const errors: VErrors = []
@@ -1148,15 +1164,15 @@ export const taggedUnion = <Tag extends string, RTS extends Array<Tagged<Tag>>>(
     },
     (s, c, decoder) => {
       const dictionaryValidation = Dictionary.validate(s, c, decoder)
-      if (dictionaryValidation.isLeft()) {
+      if (isLeft(dictionaryValidation)) {
         return dictionaryValidation
       } else {
-        const d = dictionaryValidation.value
+        const d = dictionaryValidation
         const tagValueValidation = TagValue.validate(d[tag], tag, TagValue)
-        if (tagValueValidation.isLeft()) {
+        if (isLeft(tagValueValidation)) {
           return failure(d[tag], String(' '), decoder, [tagValueValidation.value])
         } else {
-          const tagValue = tagValueValidation.value
+          const tagValue = tagValueValidation
           const i = tagValue2Index[tagValue]
           const type = types[i]
           return type.validate(d, c, type)

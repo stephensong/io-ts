@@ -2,6 +2,7 @@ import * as t from '../src/index'
 import { assertSuccess, assertFailure, assertDeepEqual, DateFromNumber } from './helpers'
 import * as assert from 'assert'
 import { Left } from 'fp-ts/lib/Either'
+import { isLeft } from '../src/index'
 
 export function strictInterfaceWithOptionals<R extends t.Props, O extends t.Props>(
   required: R,
@@ -19,10 +20,10 @@ export function strictInterfaceWithOptionals<R extends t.Props, O extends t.Prop
       loose.is(m) && Object.getOwnPropertyNames(m).every(k => props.hasOwnProperty(k)),
     (m, c, decoder) => {
       const looseValidation = loose.validate(m, c, loose)
-      if (looseValidation.isLeft()) {
+      if (isLeft(looseValidation)) {
         return t.failures(m, String(c), decoder, looseValidation.value.children)
       } else {
-        const o = looseValidation.value
+        const o = looseValidation
         const errors: Left<t.VError, any>[] = Object.getOwnPropertyNames(o)
           .map(key => (!props.hasOwnProperty(key) ? t.failure(o[key], String(key), t.never) : undefined))
           .filter((e): e is Left<t.VError, any> => e !== undefined)

@@ -1,6 +1,7 @@
 import * as assert from 'assert'
 import * as t from '../src/index'
 import { assertSuccess, assertFailure, assertStrictEqual, assertDeepEqual, DateFromNumber } from './helpers'
+import { isRight } from '../src/index'
 
 describe('interface', () => {
   it('should succeed validating a valid value', () => {
@@ -11,8 +12,8 @@ describe('interface', () => {
   it('should keep unknown properties', () => {
     const T = t.interface({ a: t.string })
     const validation = T.decode({ a: 's', b: 1 })
-    if (validation.isRight()) {
-      assert.deepEqual(validation.value, { a: 's', b: 1 })
+    if (isRight(validation)) {
+      assert.deepEqual(validation, { a: 's', b: 1 })
     } else {
       assert.ok(false)
     }
