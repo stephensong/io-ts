@@ -20,7 +20,7 @@ export interface ValidationError {
 }
 export type Validation<A> = Either<VError, A>
 export type Is<A> = (m: mixed) => m is A
-export type Validate<I, A> = (i: I, key: string, decoder: Decoder<any, any>) => Validation<A>
+export type Validate<I, A> = (i: I, key: string | number, decoder: Decoder<any, any>) => Validation<A>
 export type Decode<I, A> = (i: I) => Validation<A>
 export type Encode<A, O> = (a: A) => O
 export type Any = Type<any, any, any>
@@ -95,7 +95,7 @@ export const identity = <A>(a: A): A => a
 export const getFunctionName = (f: Function): string =>
   (f as any).displayName || (f as any).name || `<function${f.length}>`
 
-export const getContextEntry = (key: string, type: Decoder<any, any>): ContextEntry => ({ key, type })
+export const getContextEntry = (key: string | number, type: Decoder<any, any>): ContextEntry => ({ key: String(key), type })
 
 export interface VError {
   value: mixed
@@ -452,7 +452,7 @@ export const array = <RT extends Mixed>(
         const errors: VErrors = []
         for (let i = 0; i < len; i++) {
           const x = xs[i]
-          const validation = type.validate(x, String(i), type)
+          const validation = type.validate(x, i, type)
           if (validation.isLeft()) {
             errors.push(validation.value)
           } else {
@@ -726,11 +726,11 @@ export const union = <RTS extends Array<Mixed>>(
       const errors: VErrors = []
       for (let i = 0; i < len; i++) {
         const type = types[i]
-        const validation = type.validate(m, String(i), type)
-        if (validation.isRight()) {
-          return validation
-        } else {
+        const validation = type.validate(m, i, type)
+        if (validation.isLeft()) {
           errors.push(validation.value)
+        } else {
+          return validation
         }
       }
       return failures(m, getContextEntry(c, decoder), errors)
@@ -811,7 +811,7 @@ export function intersection<RTS extends Array<Mixed>>(
       const errors: VErrors = []
       for (let i = 0; i < len; i++) {
         const type = types[i]
-        const validation = type.validate(a, String(i), type)
+        const validation = type.validate(a, i, type)
         if (validation.isLeft()) {
           errors.push(...validation.value.children)
         } else {
@@ -897,7 +897,7 @@ export function tuple<RTS extends Array<Mixed>>(
         for (let i = 0; i < len; i++) {
           const a = as[i]
           const type = types[i]
-          const validation = type.validate(a, String(i), type)
+          const validation = type.validate(a, i, type)
           if (validation.isLeft()) {
             errors.push(validation.value)
           } else {
@@ -911,7 +911,7 @@ export function tuple<RTS extends Array<Mixed>>(
           }
         }
         if (as.length > len) {
-          errors.push(failureError(as[len], getContextEntry(String(len), never)))
+          errors.push(failureError(as[len], getContextEntry(len, never)))
         }
         return errors.length ? failures(m, getContextEntry(c, decoder), errors) : success(t)
       }
