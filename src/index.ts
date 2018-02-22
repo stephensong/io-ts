@@ -18,10 +18,9 @@ export interface ValidationError {
   readonly value: mixed
   readonly context: Context
 }
-export type Errors = Array<ValidationError>
-export type Validation<A> = Either<Errors, A>
+export type Validation<A> = Either<VError, A>
 export type Is<A> = (m: mixed) => m is A
-export type Validate<I, A> = (i: I, context: Context) => Validation<A>
+export type Validate<I, A> = (i: I, key: string, decoder: Decoder<any, any>) => Validation<A>
 export type Decode<I, A> = (i: I) => Validation<A>
 export type Encode<A, O> = (a: A) => O
 export type Any = Type<any, any, any>
@@ -68,12 +67,12 @@ export class Type<A, O = A, I = mixed> implements Decoder<I, A>, Encoder<A, O> {
     return new Type(
       name || `pipe(${this.name}, ${ab.name})`,
       ab.is,
-      (i, c) => {
-        const validation = this.validate(i, c)
+      (i, c, decoder) => {
+        const validation = this.validate(i, c, decoder)
         if (validation.isLeft()) {
           return validation as any
         } else {
-          return ab.validate(validation.value, c)
+          return ab.validate(validation.value, c, decoder)
         }
       },
       this.encode === identity && ab.encode === identity ? (identity as any) : b => this.encode(ab.encode(b))
@@ -87,7 +86,7 @@ export class Type<A, O = A, I = mixed> implements Decoder<I, A>, Encoder<A, O> {
   }
   /** a version of `validate` with a default context */
   decode(i: I): Validation<A> {
-    return this.validate(i, getDefaultContext(this))
+    return this.validate(i, '', this)
   }
 }
 
@@ -98,33 +97,26 @@ export const getFunctionName = (f: Function): string =>
 
 export const getContextEntry = (key: string, type: Decoder<any, any>): ContextEntry => ({ key, type })
 
-export const getValidationError = (value: mixed, context: Context): ValidationError => ({ value, context })
-
-export const getDefaultContext = (type: Decoder<any, any>): Context => [{ key: '', type }]
-
-export const appendContext = (c: Context, key: string, type: Decoder<any, any>): Context => {
-  const len = c.length
-  const r = Array(len + 1)
-  for (let i = 0; i < len; i++) {
-    r[i] = c[i]
-  }
-  r[len] = { key, type }
-  return r
+export interface VError {
+  value: mixed
+  entry: ContextEntry
+  children: VErrors
 }
+export type VErrors = Array<VError>
 
-export const failures = <T>(errors: Errors): Validation<T> => new Left(errors)
+export const failures = <T>(value: mixed, entry: ContextEntry, errors: VErrors): Validation<T> =>
+  failure(value, entry, errors)
 
-export const failure = <T>(value: mixed, context: Context): Validation<T> =>
-  failures([getValidationError(value, context)])
+export const failureError = (value: mixed, entry: ContextEntry, children: VErrors = []): VError => ({
+  value,
+  entry,
+  children
+})
 
-export const success = <T>(value: T): Validation<T> => new Right<Errors, T>(value)
+export const failure = <T>(value: mixed, entry: ContextEntry, children: VErrors = []): Validation<T> =>
+  new Left({ value, entry, children })
 
-const pushAll = <A>(xs: Array<A>, ys: Array<A>): void => {
-  const l = ys.length
-  for (let i = 0; i < l; i++) {
-    xs.push(ys[i])
-  }
-}
+export const success = <T>(value: T): Validation<T> => new Right<VError, T>(value)
 
 //
 // basic types
@@ -133,7 +125,12 @@ const pushAll = <A>(xs: Array<A>, ys: Array<A>): void => {
 export class NullType extends Type<null> {
   readonly _tag: 'NullType' = 'NullType'
   constructor() {
-    super('null', (m): m is null => m === null, (m, c) => (this.is(m) ? success(m) : failure(m, c)), identity)
+    super(
+      'null',
+      (m): m is null => m === null,
+      (m, c, decoder) => (this.is(m) ? success(m) : failure(m, getContextEntry(c, decoder))),
+      identity
+    )
   }
 }
 
@@ -146,7 +143,7 @@ export class UndefinedType extends Type<undefined> {
     super(
       'undefined',
       (m): m is undefined => m === void 0,
-      (m, c) => (this.is(m) ? success(m) : failure(m, c)),
+      (m, c, decoder) => (this.is(m) ? success(m) : failure(m, getContextEntry(c, decoder))),
       identity
     )
   }
@@ -169,7 +166,7 @@ export class NeverType extends Type<never> {
     super(
       'never',
       (_): _ is never => false,
-      (m, c) => failure(m, c),
+      (m, c, decoder) => failure(m, getContextEntry(c, decoder)),
       () => {
         throw new Error('cannot serialize never')
       }
@@ -185,7 +182,7 @@ export class StringType extends Type<string> {
     super(
       'string',
       (m): m is string => typeof m === 'string',
-      (m, c) => (this.is(m) ? success(m) : failure(m, c)),
+      (m, c, decoder) => (this.is(m) ? success(m) : failure(m, getContextEntry(c, decoder))),
       identity
     )
   }
@@ -199,7 +196,7 @@ export class NumberType extends Type<number> {
     super(
       'number',
       (m): m is number => typeof m === 'number',
-      (m, c) => (this.is(m) ? success(m) : failure(m, c)),
+      (m, c, decoder) => (this.is(m) ? success(m) : failure(m, getContextEntry(c, decoder))),
       identity
     )
   }
@@ -213,7 +210,7 @@ export class BooleanType extends Type<boolean> {
     super(
       'boolean',
       (m): m is boolean => typeof m === 'boolean',
-      (m, c) => (this.is(m) ? success(m) : failure(m, c)),
+      (m, c, decoder) => (this.is(m) ? success(m) : failure(m, getContextEntry(c, decoder))),
       identity
     )
   }
@@ -224,7 +221,12 @@ export const boolean: BooleanType = new BooleanType()
 export class AnyArrayType extends Type<Array<mixed>> {
   readonly _tag: 'AnyArrayType' = 'AnyArrayType'
   constructor() {
-    super('Array', Array.isArray, (m, c) => (this.is(m) ? success(m) : failure(m, c)), identity)
+    super(
+      'Array',
+      Array.isArray,
+      (m, c, decoder) => (this.is(m) ? success(m) : failure(m, getContextEntry(c, decoder))),
+      identity
+    )
   }
 }
 
@@ -236,7 +238,7 @@ export class AnyDictionaryType extends Type<{ [key: string]: mixed }> {
     super(
       'Dictionary',
       (m): m is { [key: string]: mixed } => m !== null && typeof m === 'object',
-      (m, c) => (this.is(m) ? success(m) : failure(m, c)),
+      (m, c, decoder) => (this.is(m) ? success(m) : failure(m, getContextEntry(c, decoder))),
       identity
     )
   }
@@ -259,7 +261,7 @@ export class FunctionType extends Type<Function> {
     super(
       'Function',
       (m): m is Function => typeof m === 'function',
-      (m, c) => (this.is(m) ? success(m) : failure(m, c)),
+      (m, c, decoder) => (this.is(m) ? success(m) : failure(m, getContextEntry(c, decoder))),
       identity
     )
   }
@@ -293,13 +295,13 @@ export const refinement = <RT extends Any>(
   new RefinementType(
     name,
     (m): m is TypeOf<RT> => type.is(m) && predicate(m),
-    (i, c) => {
-      const validation = type.validate(i, c)
+    (i, c, decoder) => {
+      const validation = type.validate(i, c, decoder)
       if (validation.isLeft()) {
         return validation
       } else {
         const a = validation.value
-        return predicate(a) ? success(a) : failure(a, c)
+        return predicate(a) ? success(a) : failure(a, getContextEntry(c, decoder))
       }
     },
     type.encode,
@@ -331,7 +333,13 @@ export const literal = <V extends string | number | boolean>(
   name: string = JSON.stringify(value)
 ): LiteralType<V> => {
   const is = (m: mixed): m is V => m === value
-  return new LiteralType(name, is, (m, c) => (is(m) ? success(value) : failure(m, c)), identity, value)
+  return new LiteralType(
+    name,
+    is,
+    (m, c, decoder) => (is(m) ? success(value) : failure(m, getContextEntry(c, decoder))),
+    identity,
+    value
+  )
 }
 
 //
@@ -356,7 +364,13 @@ export const keyof = <D extends { [key: string]: mixed }>(
   name: string = `(keyof ${JSON.stringify(Object.keys(keys))})`
 ): KeyofType<D> => {
   const is = (m: mixed): m is keyof D => string.is(m) && keys.hasOwnProperty(m)
-  return new KeyofType(name, is, (m, c) => (is(m) ? success(m) : failure(m, c)), identity, keys)
+  return new KeyofType(
+    name,
+    is,
+    (m, c, decoder) => (is(m) ? success(m) : failure(m, getContextEntry(c, decoder))),
+    identity,
+    keys
+  )
 }
 
 //
@@ -393,7 +407,10 @@ export const recursion = <A, O = A, I = mixed, RT extends Type<A, O, I> = Type<A
   const Self: any = new RecursiveType<RT, A, O, I>(
     name,
     (m): m is A => runDefinition().is(m),
-    (m, c) => runDefinition().validate(m, c),
+    (m, c, decoder) => {
+      const T = runDefinition()
+      return T.validate(m, c, decoder)
+    },
     a => runDefinition().encode(a),
     runDefinition
   )
@@ -424,20 +441,20 @@ export const array = <RT extends Mixed>(
   new ArrayType(
     name,
     (m): m is Array<TypeOf<RT>> => arrayType.is(m) && m.every(type.is),
-    (m, c) => {
-      const arrayValidation = arrayType.validate(m, c)
+    (m, c, decoder) => {
+      const arrayValidation = arrayType.validate(m, c, decoder)
       if (arrayValidation.isLeft()) {
         return arrayValidation
       } else {
         const xs = arrayValidation.value
         const len = xs.length
         let a: Array<TypeOf<RT>> = xs
-        const errors: Errors = []
+        const errors: VErrors = []
         for (let i = 0; i < len; i++) {
           const x = xs[i]
-          const validation = type.validate(x, appendContext(c, String(i), type))
+          const validation = type.validate(x, String(i), type)
           if (validation.isLeft()) {
-            pushAll(errors, validation.value)
+            errors.push(validation.value)
           } else {
             const vx = validation.value
             if (vx !== x) {
@@ -448,7 +465,7 @@ export const array = <RT extends Mixed>(
             }
           }
         }
-        return errors.length ? failures(errors) : success(a)
+        return errors.length ? failures(m, getContextEntry(c, decoder), errors) : success(a)
       }
     },
     type.encode === identity ? identity : a => a.map(type.encode),
@@ -516,20 +533,20 @@ export const type = <P extends Props>(
       }
       return true
     },
-    (m, c) => {
-      const dictionaryValidation = Dictionary.validate(m, c)
+    (m, c, decoder) => {
+      const dictionaryValidation = Dictionary.validate(m, c, decoder)
       if (dictionaryValidation.isLeft()) {
         return dictionaryValidation
       } else {
         const o = dictionaryValidation.value
         let a = o
-        const errors: Errors = []
+        const errors: VErrors = []
         for (let k in props) {
           const ok = o[k]
           const type = props[k]
-          const validation = type.validate(ok, appendContext(c, k, type))
+          const validation = type.validate(ok, k, type)
           if (validation.isLeft()) {
-            pushAll(errors, validation.value)
+            errors.push(validation.value)
           } else {
             const vok = validation.value
             if (vok !== ok) {
@@ -540,7 +557,7 @@ export const type = <P extends Props>(
             }
           }
         }
-        return errors.length ? failures(errors) : success(a as any)
+        return errors.length ? failures(m, getContextEntry(c, decoder), errors) : success(a as any)
       }
     },
     useIdentity(props)
@@ -636,35 +653,35 @@ export const dictionary = <D extends Mixed, C extends Mixed>(
     name,
     (m): m is TypeOfDictionary<D, C> =>
       Dictionary.is(m) && Object.keys(m).every(k => domain.is(k) && codomain.is(m[k])),
-    (m, c) => {
-      const dictionaryValidation = Dictionary.validate(m, c)
+    (m, c, decoder) => {
+      const dictionaryValidation = Dictionary.validate(m, c, decoder)
       if (dictionaryValidation.isLeft()) {
         return dictionaryValidation
       } else {
         const o = dictionaryValidation.value
         const a: { [key: string]: any } = {}
-        const errors: Errors = []
+        const errors: VErrors = []
         let changed = false
         for (let k in o) {
           const ok = o[k]
-          const domainValidation = domain.validate(k, appendContext(c, k, domain))
-          const codomainValidation = codomain.validate(ok, appendContext(c, k, codomain))
+          const domainValidation = domain.validate(k, k, domain)
+          const codomainValidation = codomain.validate(ok, k, codomain)
           if (domainValidation.isLeft()) {
-            pushAll(errors, domainValidation.value)
+            errors.push(domainValidation.value)
           } else {
             const vk = domainValidation.value
             changed = changed || vk !== k
             k = vk
           }
           if (codomainValidation.isLeft()) {
-            pushAll(errors, codomainValidation.value)
+            errors.push(codomainValidation.value)
           } else {
             const vok = codomainValidation.value
             changed = changed || vok !== ok
             a[k] = vok
           }
         }
-        return errors.length ? failures(errors) : success((changed ? a : o) as any)
+        return errors.length ? failures(m, getContextEntry(c, decoder), errors) : success((changed ? a : o) as any)
       }
     },
     domain.encode === identity && codomain.encode === identity
@@ -705,18 +722,18 @@ export const union = <RTS extends Array<Mixed>>(
   return new UnionType(
     name,
     (m): m is TypeOf<RTS['_A']> => types.some(type => type.is(m)),
-    (m, c) => {
-      const errors: Errors = []
+    (m, c, decoder) => {
+      const errors: VErrors = []
       for (let i = 0; i < len; i++) {
         const type = types[i]
-        const validation = type.validate(m, appendContext(c, String(i), type))
+        const validation = type.validate(m, String(i), type)
         if (validation.isRight()) {
           return validation
         } else {
-          pushAll(errors, validation.value)
+          errors.push(validation.value)
         }
       }
-      return failures(errors)
+      return failures(m, getContextEntry(c, decoder), errors)
     },
     types.every(type => type.encode === identity)
       ? identity
@@ -789,19 +806,19 @@ export function intersection<RTS extends Array<Mixed>>(
   return new IntersectionType(
     name,
     (m): m is any => types.every(type => type.is(m)),
-    (m, c) => {
+    (m, c, decoder) => {
       let a = m
-      const errors: Errors = []
+      const errors: VErrors = []
       for (let i = 0; i < len; i++) {
         const type = types[i]
-        const validation = type.validate(a, c)
+        const validation = type.validate(a, String(i), type)
         if (validation.isLeft()) {
-          pushAll(errors, validation.value)
+          errors.push(...validation.value.children)
         } else {
           a = validation.value
         }
       }
-      return errors.length ? failures(errors) : success(a)
+      return errors.length ? failures(m, getContextEntry(c, decoder), errors) : success(a)
     },
     types.every(type => type.encode === identity)
       ? identity
@@ -869,20 +886,20 @@ export function tuple<RTS extends Array<Mixed>>(
   return new TupleType(
     name,
     (m): m is any => arrayType.is(m) && m.length === len && types.every((type, i) => type.is(m[i])),
-    (m, c) => {
-      const arrayValidation = arrayType.validate(m, c)
+    (m, c, decoder) => {
+      const arrayValidation = arrayType.validate(m, c, arrayType)
       if (arrayValidation.isLeft()) {
         return arrayValidation
       } else {
         const as = arrayValidation.value
         let t: Array<any> = as
-        const errors: Errors = []
+        const errors: VErrors = []
         for (let i = 0; i < len; i++) {
           const a = as[i]
           const type = types[i]
-          const validation = type.validate(a, appendContext(c, String(i), type))
+          const validation = type.validate(a, String(i), type)
           if (validation.isLeft()) {
-            pushAll(errors, validation.value)
+            errors.push(validation.value)
           } else {
             const va = validation.value
             if (va !== a) {
@@ -894,9 +911,9 @@ export function tuple<RTS extends Array<Mixed>>(
           }
         }
         if (as.length > len) {
-          errors.push(getValidationError(as[len], appendContext(c, String(len), never)))
+          errors.push(failureError(as[len], getContextEntry(String(len), never)))
         }
-        return errors.length ? failures(errors) : success(t)
+        return errors.length ? failures(m, getContextEntry(c, decoder), errors) : success(t)
       }
     },
     types.every(type => type.encode === identity) ? identity : a => types.map((type, i) => type.encode(a[i])),
@@ -928,8 +945,8 @@ export const readonly = <RT extends Mixed>(
   new ReadonlyType(
     name,
     type.is,
-    (m, c) =>
-      type.validate(m, c).map(x => {
+    (m, c, decoder) =>
+      type.validate(m, c, decoder).map(x => {
         if (process.env.NODE_ENV !== 'production') {
           return Object.freeze(x)
         }
@@ -964,8 +981,8 @@ export const readonlyArray = <RT extends Mixed>(
   return new ReadonlyArrayType(
     name,
     arrayType.is,
-    (m, c) =>
-      arrayType.validate(m, c).map(x => {
+    (m, c, decoder) =>
+      arrayType.validate(m, c, decoder).map(x => {
         if (process.env.NODE_ENV !== 'production') {
           return Object.freeze(x)
         } else {
@@ -1003,22 +1020,22 @@ export const strict = <P extends Props>(
   return new StrictType(
     name,
     (m): m is TypeOfProps<P> => loose.is(m) && Object.getOwnPropertyNames(m).every(k => props.hasOwnProperty(k)),
-    (m, c) => {
-      const looseValidation = loose.validate(m, c)
+    (m, c, decoder) => {
+      const looseValidation = loose.validate(m, c, loose)
       if (looseValidation.isLeft()) {
         return looseValidation
       } else {
         const o = looseValidation.value
         const keys = Object.getOwnPropertyNames(o)
         const len = keys.length
-        const errors: Errors = []
+        const errors: VErrors = []
         for (let i = 0; i < len; i++) {
           const key = keys[i]
           if (!props.hasOwnProperty(key)) {
-            errors.push(getValidationError(o[key], appendContext(c, key, never)))
+            errors.push(failureError(o[key], getContextEntry(key, never)))
           }
         }
-        return errors.length ? failures(errors) : success(o)
+        return errors.length ? failures(m, getContextEntry('', decoder), errors) : success(o)
       }
     },
     loose.encode,
@@ -1129,20 +1146,20 @@ export const taggedUnion = <Tag extends string, RTS extends Array<Tagged<Tag>>>(
       const tagValue = v[tag]
       return TagValue.is(tagValue) && types[tagValue2Index[tagValue]].is(v)
     },
-    (s, c) => {
-      const dictionaryValidation = Dictionary.validate(s, c)
+    (s, c, decoder) => {
+      const dictionaryValidation = Dictionary.validate(s, c, decoder)
       if (dictionaryValidation.isLeft()) {
         return dictionaryValidation
       } else {
         const d = dictionaryValidation.value
-        const tagValueValidation = TagValue.validate(d[tag], appendContext(c, tag, TagValue))
+        const tagValueValidation = TagValue.validate(d[tag], tag, TagValue)
         if (tagValueValidation.isLeft()) {
-          return tagValueValidation
+          return failure(d[tag], getContextEntry(' ', decoder), [tagValueValidation.value])
         } else {
           const tagValue = tagValueValidation.value
           const i = tagValue2Index[tagValue]
           const type = types[i]
-          return type.validate(d, appendContext(c, String(i), type))
+          return type.validate(d, c, type)
         }
       }
     },

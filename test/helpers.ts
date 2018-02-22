@@ -22,12 +22,12 @@ export function assertDeepEqual<T>(validation: t.Validation<T>, value: any): voi
 export const string2 = new t.Type<string, string>(
   'string2',
   (v): v is string => t.string.is(v) && v[1] === '-',
-  (s, c) =>
-    t.string.validate(s, c).chain(s => {
+  (s, c, decoder) =>
+    t.string.validate(s, c, t.string).chain(s => {
       if (s.length === 2) {
         return t.success(s[0] + '-' + s[1])
       } else {
-        return t.failure(s, c)
+        return t.failure(s, t.getContextEntry(c, decoder))
       }
     }),
   a => a[0] + a[2]
@@ -36,10 +36,10 @@ export const string2 = new t.Type<string, string>(
 export const DateFromNumber = new t.Type<Date, number>(
   'DateFromNumber',
   (v): v is Date => v instanceof Date,
-  (s, c) =>
-    t.number.validate(s, c).chain(n => {
+  (s, c, decoder) =>
+    t.number.validate(s, c, t.number).chain(n => {
       const d = new Date(n)
-      return isNaN(d.getTime()) ? t.failure(n, c) : t.success(d)
+      return isNaN(d.getTime()) ? t.failure(n, t.getContextEntry(c, decoder)) : t.success(d)
     }),
   a => a.getTime()
 )
@@ -47,9 +47,9 @@ export const DateFromNumber = new t.Type<Date, number>(
 export const NumberFromString = new t.Type<number, string, string>(
   'NumberFromString',
   t.number.is,
-  (s, c) => {
+  (s, c, decoder) => {
     const n = parseFloat(s)
-    return isNaN(n) ? t.failure(s, c) : t.success(n)
+    return isNaN(n) ? t.failure(s, t.getContextEntry(c, decoder)) : t.success(n)
   },
   String
 )
@@ -60,7 +60,7 @@ export function withDefault<T extends t.Mixed>(type: T, defaultValue: t.TypeOf<T
   return new t.Type(
     `withDefault(${type.name}, ${JSON.stringify(defaultValue)})`,
     type.is,
-    (v, c) => type.validate(v != null ? v : defaultValue, c),
+    (v, c, _decoder) => type.validate(v != null ? v : defaultValue, c, type),
     type.encode
   )
 }

@@ -9,9 +9,9 @@ describe('Type', () => {
     const BAA = new t.Type<number, string, string>(
       'BAA',
       t.number.is,
-      (s, c) => {
+      (s, c, decoder) => {
         const n = parseFloat(s)
-        return isNaN(n) ? t.failure(s, c) : t.success(n)
+        return isNaN(n) ? t.failure(s, t.getContextEntry(c, decoder)) : t.success(n)
       },
       n => String(n)
     )

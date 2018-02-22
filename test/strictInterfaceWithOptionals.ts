@@ -1,6 +1,7 @@
 import * as t from '../src/index'
 import { assertSuccess, assertFailure, assertDeepEqual, DateFromNumber } from './helpers'
 import * as assert from 'assert'
+import { Left } from 'fp-ts/lib/Either'
 
 export function strictInterfaceWithOptionals<R extends t.Props, O extends t.Props>(
   required: R,
@@ -16,16 +17,18 @@ export function strictInterfaceWithOptionals<R extends t.Props, O extends t.Prop
     name || `StrictInterfaceWithOptionals(${loose.name})`,
     (m): m is t.TypeOfProps<R> & t.TypeOfPartialProps<O> =>
       loose.is(m) && Object.getOwnPropertyNames(m).every(k => props.hasOwnProperty(k)),
-    (m, c) =>
-      loose.validate(m, c).chain(o => {
-        const errors: t.Errors = Object.getOwnPropertyNames(o)
-          .map(
-            key =>
-              !props.hasOwnProperty(key) ? t.getValidationError(o[key], t.appendContext(c, key, t.never)) : undefined
-          )
-          .filter((e): e is t.ValidationError => e !== undefined)
-        return errors.length ? t.failures(errors) : t.success(o)
-      }),
+    (m, c, decoder) => {
+      const looseValidation = loose.validate(m, c, loose)
+      if (looseValidation.isLeft()) {
+        return t.failures(m, t.getContextEntry(c, decoder), looseValidation.value.children)
+      } else {
+        const o = looseValidation.value
+        const errors: Left<t.VError, any>[] = Object.getOwnPropertyNames(o)
+          .map(key => (!props.hasOwnProperty(key) ? t.failure(o[key], t.getContextEntry(key, t.never)) : undefined))
+          .filter((e): e is Left<t.VError, any> => e !== undefined)
+        return errors.length ? t.failures(m, t.getContextEntry(c, decoder), errors.map(x => x.value)) : t.success(o)
+      }
+    },
     loose.encode
   )
 }

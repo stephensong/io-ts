@@ -1,5 +1,7 @@
 import { Reporter } from './Reporter'
-import { Context, getFunctionName, ValidationError } from './index'
+import { Context, getFunctionName, ValidationError, VError } from './index'
+import * as arrays from 'fp-ts/lib/Array'
+import { compose } from 'fp-ts/lib/function'
 
 function stringify(v: any): string {
   return typeof v === 'function' ? getFunctionName(v) : JSON.stringify(v)
@@ -21,6 +23,18 @@ export function success(): Array<string> {
   return ['No errors!']
 }
 
+export const convertError = (x: VError): ValidationError[] => {
+  if (x.children.length > 0) {
+    return arrays.array.chain(x.children, child =>
+      convertError(child).map<ValidationError>(error => {
+        const context: Context = arrays.cons(x.entry, error.context)
+        return { value: error.value, context }
+      })
+    )
+  } else {
+    return [{ value: x.value, context: [x.entry] }]
+  }
+}
 export const PathReporter: Reporter<Array<string>> = {
-  report: validation => validation.fold(failure, success)
+  report: validation => validation.fold(compose(failure, convertError), success)
 }
