@@ -308,8 +308,7 @@ export const refinement = <RT extends Any>(
       if (isLeft(validation)) {
         return validation
       } else {
-        const a = validation
-        return predicate(a) ? success(a) : failure(a, String(c), decoder)
+        return predicate(validation) ? success(validation) : failure(validation, String(c), decoder)
       }
     },
     type.encode,
@@ -464,12 +463,11 @@ export const array = <RT extends Mixed>(
           if (isLeft(validation)) {
             errors.push(validation.value)
           } else {
-            const vx = validation
-            if (vx !== x) {
-              if (a === xs) {
+            if (validation !== x) {
+              if (a === validation) {
                 a = xs.slice()
               }
-              a[i] = vx
+              a[i] = validation
             }
           }
         }
@@ -507,7 +505,7 @@ const getNameFromProps = (props: Props): string =>
     .join(', ')} }`
 
 const useIdentity = (props: Props): boolean => {
-  for (let k in props) {
+  for (const k in props) {
     if (props[k].encode !== identity) {
       return false
     }
@@ -534,7 +532,7 @@ export const type = <P extends Props>(
       if (!Dictionary.is(m)) {
         return false
       }
-      for (let k in props) {
+      for (const k in props) {
         if (!props[k].is(m[k])) {
           return false
         }
@@ -549,19 +547,18 @@ export const type = <P extends Props>(
         const o = dictionaryValidation
         let a = o
         const errors: VErrors = []
-        for (let k in props) {
+        for (const k in props) {
           const ok = o[k]
           const type = props[k]
           const validation = type.validate(ok, k, type)
           if (isLeft(validation)) {
             errors.push(validation.value)
           } else {
-            const vok = validation
-            if (vok !== ok) {
+            if (validation !== ok) {
               if (a === o) {
                 a = { ...o }
               }
-              a[k] = vok
+              a[k] = validation
             }
           }
         }
@@ -572,7 +569,7 @@ export const type = <P extends Props>(
       ? identity
       : a => {
           const s: { [x: string]: any } = { ...(a as any) }
-          for (let k in props) {
+          for (const k in props) {
             s[k] = props[k].encode(a[k])
           }
           return s as any
@@ -606,7 +603,7 @@ export const partial = <P extends Props>(
   name: string = `PartialType<${getNameFromProps(props)}>`
 ): PartialType<P, { [K in keyof P]?: TypeOf<P[K]> }, { [K in keyof P]?: OutputOf<P[K]> }, mixed> => {
   const partials: Props = {}
-  for (let k in props) {
+  for (const k in props) {
     partials[k] = union([props[k], undefinedType])
   }
   const partial = type(partials)
@@ -618,7 +615,7 @@ export const partial = <P extends Props>(
       ? identity
       : a => {
           const s: { [key: string]: any } = {}
-          for (let k in props) {
+          for (const k in props) {
             const ak = a[k]
             if (ak !== undefined) {
               s[k] = props[k].encode(ak)
@@ -696,7 +693,7 @@ export const dictionary = <D extends Mixed, C extends Mixed>(
       ? identity
       : a => {
           const s: { [key: string]: any } = {}
-          for (let k in a) {
+          for (const k in a) {
             s[String(domain.encode(k))] = codomain.encode(a[k])
           }
           return s as any
@@ -909,12 +906,11 @@ export function tuple<RTS extends Array<Mixed>>(
           if (isLeft(validation)) {
             errors.push(validation.value)
           } else {
-            const va = validation
-            if (va !== a) {
+            if (validation !== a) {
               if (t === as) {
                 t = as.slice()
               }
-              t[i] = va
+              t[i] = validation
             }
           }
         }
