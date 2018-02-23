@@ -525,8 +525,11 @@ export interface Props {
 export const type = <P extends Props>(
   props: P,
   name: string = getNameFromProps(props)
-): InterfaceType<P, { [K in keyof P]: TypeOf<P[K]> }, { [K in keyof P]: OutputOf<P[K]> }, mixed> =>
-  new InterfaceType(
+): InterfaceType<P, {[K in keyof P]: TypeOf<P[K]> }, {[K in keyof P]: OutputOf<P[K]> }, mixed> => {
+  const flatPropsKeys = Object.keys(props)
+  const flatPropsTypes = flatPropsKeys.map(key => props[key])
+  const len = flatPropsKeys.length
+  return new InterfaceType(
     name,
     (m): m is TypeOfProps<P> => {
       if (!Dictionary.is(m)) {
@@ -547,9 +550,11 @@ export const type = <P extends Props>(
         const o = dictionaryValidation
         let a = o
         const errors: VErrors = []
-        for (const k in props) {
+        for (var i = 0; i < len; i++) {
+          const k = flatPropsKeys[i]
           const ok = o[k]
-          const type = props[k]
+          const type = flatPropsTypes[i]
+          i++
           const validation = type.validate(ok, k, type)
           if (isLeft(validation)) {
             errors.push(validation.value)
@@ -568,15 +573,15 @@ export const type = <P extends Props>(
     useIdentity(props)
       ? identity
       : a => {
-          const s: { [x: string]: any } = { ...(a as any) }
-          for (const k in props) {
-            s[k] = props[k].encode(a[k])
-          }
-          return s as any
-        },
+        const s: { [x: string]: any } = { ...(a as any) }
+        for (const k in props) {
+          s[k] = props[k].encode(a[k])
+        }
+        return s as any
+      },
     props
   )
-
+}
 //
 // partials
 //
