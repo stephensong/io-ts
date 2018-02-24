@@ -229,12 +229,7 @@ export const boolean: BooleanType = new BooleanType()
 export class AnyArrayType extends Type<Array<mixed>> {
   readonly _tag: 'AnyArrayType' = 'AnyArrayType'
   constructor() {
-    super(
-      'Array',
-      Array.isArray,
-      (m, c, decoder) => (this.is(m) ? m : failure(m, String(c), decoder)),
-      identity
-    )
+    super('Array', Array.isArray, (m, c, decoder) => (this.is(m) ? m : failure(m, String(c), decoder)), identity)
   }
 }
 
@@ -340,13 +335,7 @@ export const literal = <V extends string | number | boolean>(
   name: string = JSON.stringify(value)
 ): LiteralType<V> => {
   const is = (m: mixed): m is V => m === value
-  return new LiteralType(
-    name,
-    is,
-    (m, c, decoder) => (is(m) ? value : failure(m, String(c), decoder)),
-    identity,
-    value
-  )
+  return new LiteralType(name, is, (m, c, decoder) => (is(m) ? value : failure(m, String(c), decoder)), identity, value)
 }
 
 //
@@ -371,13 +360,7 @@ export const keyof = <D extends { [key: string]: mixed }>(
   name: string = `(keyof ${JSON.stringify(Object.keys(keys))})`
 ): KeyofType<D> => {
   const is = (m: mixed): m is keyof D => string.is(m) && keys.hasOwnProperty(m)
-  return new KeyofType(
-    name,
-    is,
-    (m, c, decoder) => (is(m) ? m : failure(m, String(c), decoder)),
-    identity,
-    keys
-  )
+  return new KeyofType(name, is, (m, c, decoder) => (is(m) ? m : failure(m, String(c), decoder)), identity, keys)
 }
 
 //
@@ -525,7 +508,7 @@ export interface Props {
 export const type = <P extends Props>(
   props: P,
   name: string = getNameFromProps(props)
-): InterfaceType<P, {[K in keyof P]: TypeOf<P[K]> }, {[K in keyof P]: OutputOf<P[K]> }, mixed> => {
+): InterfaceType<P, { [K in keyof P]: TypeOf<P[K]> }, { [K in keyof P]: OutputOf<P[K]> }, mixed> => {
   const flatPropsKeys = Object.keys(props)
   const flatPropsTypes = flatPropsKeys.map(key => props[key])
   const len = flatPropsKeys.length
@@ -553,7 +536,7 @@ export const type = <P extends Props>(
         for (let i = 0; i < len; i++) {
           const k = flatPropsKeys[i]
           const type = flatPropsTypes[i]
-          const ok = o[k] 
+          const ok = o[k]
           const validation = type.validate(ok, k, type)
           if (isLeft(validation)) {
             errors.push(validation.value)
@@ -572,14 +555,14 @@ export const type = <P extends Props>(
     useIdentity(props)
       ? identity
       : a => {
-        const s: { [x: string]: any } = { ...(a as any) }
-        for (let i = 0; i < len; i++) {
-          const k = flatPropsKeys[i];
-          const type = flatPropsTypes[i];
-          s[k] = type.encode(a[k])
-        }
-        return s as any
-      },
+          const s: { [x: string]: any } = { ...(a as any) }
+          for (let i = 0; i < len; i++) {
+            const k = flatPropsKeys[i]
+            const type = flatPropsTypes[i]
+            s[k] = type.encode(a[k])
+          }
+          return s as any
+        },
     props
   )
 }
