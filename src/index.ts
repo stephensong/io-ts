@@ -550,11 +550,10 @@ export const type = <P extends Props>(
         const o = dictionaryValidation
         let a = o
         const errors: VErrors = []
-        for (var i = 0; i < len; i++) {
+        for (let i = 0; i < len; i++) {
           const k = flatPropsKeys[i]
-          const ok = o[k]
           const type = flatPropsTypes[i]
-          i++
+          const ok = o[k] 
           const validation = type.validate(ok, k, type)
           if (isLeft(validation)) {
             errors.push(validation.value)
@@ -574,8 +573,10 @@ export const type = <P extends Props>(
       ? identity
       : a => {
         const s: { [x: string]: any } = { ...(a as any) }
-        for (const k in props) {
-          s[k] = props[k].encode(a[k])
+        for (let i = 0; i < len; i++) {
+          const k = flatPropsKeys[i];
+          const type = flatPropsTypes[i];
+          s[k] = type.encode(a[k])
         }
         return s as any
       },
