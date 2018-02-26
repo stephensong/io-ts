@@ -306,7 +306,7 @@ f(Rec) // OK!
 // tagged union
 //
 const TU1 = t.taggedUnion('type', [t.type({ type: t.literal('a') }), t.type({ type: t.literal('b') })])
-// $ExpectError Type 'true' is not assignable to type 'TypeOfProps<{ type: LiteralType<"a">; }> | TypeOfProps<{ type: LiteralType<"b">; }>'
+// $ExpectError Type 'true' is not assignable to type '{ type: "a"; } | { type: "b"; }'
 const x36: TypeOf<typeof TU1> = true
 const x37: TypeOf<typeof TU1> = { type: 'a' }
 const x38: TypeOf<typeof TU1> = { type: 'b' }
@@ -367,3 +367,17 @@ const ActionType = pluck(Action, 'type')
 
 declare const Any1: t.AnyType | t.InterfaceType<any>
 Any1.decode(1)
+
+//
+// optional combinator
+//
+
+const OC1 = t.type({
+  a: t.string,
+  b: t.optional(t.number)
+})
+
+// $ExpectError Type '{ a: string; b: string; }' is not assignable to type '{ a: string; } & { b?: number | undefined; }'
+const x39: TypeOf<typeof OC1> = { a: 'a', b: 'b' }
+const x40: TypeOf<typeof OC1> = { a: 'a' }
+const x41: TypeOf<typeof OC1> = { a: 'a', b: 1 }

@@ -9,13 +9,13 @@
     "lint": "tslint -p tsconfig.json src/**/*.ts test/**/*.ts",
     "typings-checker":
       "typings-checker --allow-expect-error --project typings-checker/tsconfig.json typings-checker/index.ts",
-    "mocha": "TS_NODE_CACHE=false TS_NODE_PROJECT=test/tsconfig.json mocha -r ts-node/register test/*.ts",
+    "mocha": "cross-env TS_NODE_CACHE=false TS_NODE_PROJECT=test/tsconfig.json mocha -r ts-node/register test/*.ts",
     "prettier":
       "prettier --no-semi --single-quote --print-width 120 --parser typescript --list-different \"{src,test}/**/*.ts\"",
     "fix-prettier":
       "prettier --no-semi --single-quote --print-width 120 --parser typescript --write \"{src,test,examples,exercises}/**/*.ts\"",
     "test": "npm run prettier && npm run lint && npm run typings-checker && npm run mocha",
-    "clean": "rm -rf lib/*",
+    "clean": "rimraf lib/*",
     "build": "npm run clean && tsc",
     "perf": "node perf/index"
   },
@@ -37,12 +37,14 @@
     "@types/mocha": "2.2.38",
     "@types/node": "7.0.4",
     "benchmark": "2.1.4",
+    "cross-env": "^5.1.4",
     "mocha": "3.2.0",
-    "prettier": "^1.11.0",
+    "prettier": "1.12.1",
+    "rimraf": "^2.6.2",
     "ts-node": "3.2.0",
     "tslint": "5.9.1",
     "tslint-config-standard": "7.0.0",
-    "typescript": "^2.8.3",
+    "typescript": "2.8.3",
     "typings-checker": "1.1.2"
   },
   "tags": ["typescript", "validation", "inference", "types", "runtime"],
